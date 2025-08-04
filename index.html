@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Google Drive MP3 Player</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    button { margin: 5px; padding: 10px; }
+    #track-title { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>🎵 Google Drive MP3 Player</h1>
+  <audio id="audio" controls autoplay></audio>
+  <div>
+    <button onclick="prevTrack()">⏮️ Prev</button>
+    <button onclick="nextTrack()">⏭️ Next</button>
+    <button onclick="shuffleTrack()">🔀 Shuffle</button>
+  </div>
+  <div id="track-title">Loading tracks...</div>
+
+  <script>
+    const folderId = '1DGz9zEQh29EAqTZpmWK5mwSj5HComnkn';
+    const apiKey = 'AIzaSyDsYE91wH7UDwu8eZNbD1CFuVcilgYeZhI';
+
+    const audio = document.getElementById('audio');
+    const title = document.getElementById('track-title');
+    let tracks = [];
+    let currentTrack = 0;
+
+    function playTrack(index) {
+      const track = tracks[index];
+      if (!track) return;
+      currentTrack = index;
+      const url = `https://www.googleapis.com/drive/v3/files/${track.id}?alt=media&key=${apiKey}`;
+      audio.src = url;
+      title.textContent = track.name;
+      audio.play();
+    }
+
+    function nextTrack() {
+      currentTrack = (currentTrack + 1) % tracks.length;
+      playTrack(currentTrack);
+    }
+
+    function prevTrack() {
+      currentTrack = (currentTrack - 1 + tracks.length) % tracks.length;
+      playTrack(currentTrack);
+    }
+
+    function shuffleTrack() {
+      const randomIndex = Math.floor(Math.random() * tracks.length);
+      playTrack(randomIndex);
+    }
+
+    async function loadTracks() {
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+mimeType='audio/mpeg'&fields=files(id,name)&key=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.files.length === 0) {
+          title.textContent = 'No MP3 files found.';
+          return;
+        }
+        tracks = data.files;
+        playTrack(0);
+      } catch (err) {
+        title.textContent = 'Failed to load tracks.';
+        console.error(err);
+      }
+    }
+
+    loadTracks();
+    audio.addEventListener('ended', nextTrack);
+  </script>
+</body>
+</html>
