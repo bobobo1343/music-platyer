@@ -1,1 +1,1 @@
-# music-platyer
+# music-player
