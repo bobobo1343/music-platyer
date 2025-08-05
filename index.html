@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Drive MP3 Playlist Player</title>
+  <title>Drive Music Player</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -11,16 +11,26 @@
       text-align: center;
       padding: 20px;
     }
-
     h1 {
       color: #1db954;
     }
-
+    .player-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .album-art {
+      width: 200px;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #333;
+    }
     audio {
       width: 100%;
       margin-top: 10px;
     }
-
     .controls button {
       padding: 10px 20px;
       margin: 5px;
@@ -30,30 +40,26 @@
       color: white;
       cursor: pointer;
     }
-
     .controls button:hover {
       background-color: #17a44a;
     }
-
     #playlist {
       list-style: none;
       padding: 0;
       margin-top: 20px;
-      max-height: 250px;
+      max-height: 300px;
       overflow-y: auto;
+      width: 100%;
       text-align: left;
     }
-
     #playlist li {
       padding: 10px;
       cursor: pointer;
       border-bottom: 1px solid #333;
     }
-
     #playlist li:hover {
       background: #222;
     }
-
     #playlist .active {
       background: #1db954;
       color: white;
@@ -61,9 +67,12 @@
   </style>
 </head>
 <body>
-  <h1>🎶 Music Player</h1>
+  <h1>🎶 Drive Music Player</h1>
 
-  <audio id="audio" controls autoplay></audio>
+  <div class="player-container">
+    <img id="albumArt" class="album-art" src="" alt="Album Art" />
+    <audio id="audio" controls autoplay></audio>
+  </div>
 
   <div class="controls">
     <button onclick="prevTrack()">⏮️ Prev</button>
@@ -76,20 +85,32 @@
   <script>
     const folderId = '1DGz9zEQh29EAqTZpmWK5mwSj5HComnkn';
     const apiKey = 'AIzaSyDsYE91wH7UDwu8eZNbD1CFuVcilgYeZhI';
-
     const audio = document.getElementById('audio');
     const playlistEl = document.getElementById('playlist');
+    const albumArt = document.getElementById('albumArt');
 
     let tracks = [];
     let currentTrack = 0;
 
-    function getTrackUrl(id) {
+    function getDriveUrl(id) {
       return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${apiKey}`;
+    }
+
+    function getFileExtension(name) {
+      return name.split('.').pop().toLowerCase();
+    }
+
+    function findAlbumArt(trackName) {
+      const baseName = trackName.replace(/\.[^/.]+$/, ""); // remove extension
+      return tracks.find(
+        f => getFileExtension(f.name) === 'jpg' && f.name.startsWith(baseName)
+      );
     }
 
     function renderPlaylist() {
       playlistEl.innerHTML = '';
       tracks.forEach((track, index) => {
+        if (!['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
         const li = document.createElement('li');
         li.textContent = track.name;
         li.onclick = () => playTrack(index);
@@ -99,40 +120,60 @@
     }
 
     function playTrack(index) {
-      if (!tracks[index]) return;
+      const track = tracks[index];
+      if (!track || !['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
+
       currentTrack = index;
-      audio.src = getTrackUrl(tracks[index].id);
+      audio.src = getDriveUrl(track.id);
       audio.play();
+
+      const artFile = findAlbumArt(track.name);
+      albumArt.src = artFile ? getDriveUrl(artFile.id) : '';
+
       renderPlaylist();
     }
 
     function nextTrack() {
-      currentTrack = (currentTrack + 1) % tracks.length;
-      playTrack(currentTrack);
+      let i = currentTrack + 1;
+      while (i < tracks.length && !['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name))) i++;
+      if (i >= tracks.length) i = 0;
+      playTrack(i);
     }
 
     function prevTrack() {
-      currentTrack = (currentTrack - 1 + tracks.length) % tracks.length;
-      playTrack(currentTrack);
+      let i = currentTrack - 1;
+      while (i >= 0 && !['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name))) i--;
+      if (i < 0) i = tracks.length - 1;
+      playTrack(i);
     }
 
     function shuffleTrack() {
-      const randomIndex = Math.floor(Math.random() * tracks.length);
-      playTrack(randomIndex);
+      let i;
+      do {
+        i = Math.floor(Math.random() * tracks.length);
+      } while (!['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name)));
+      playTrack(i);
     }
 
     async function loadTracks() {
       try {
         const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+mimeType='audio/mpeg'&fields=files(id,name)&key=${apiKey}`
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name)&key=${apiKey}`
         );
         const data = await res.json();
         tracks = data.files;
         if (!tracks.length) {
-          alert('No MP3 files found.');
+          alert('No files found.');
           return;
         }
-        playTrack(0);
+
+        const firstPlayableIndex = tracks.findIndex(file =>
+          ['mp3', 'wav', 'm4a'].includes(getFileExtension(file.name))
+        );
+        if (firstPlayableIndex >= 0) {
+          playTrack(firstPlayableIndex);
+        }
+
       } catch (err) {
         console.error('Error loading tracks:', err);
       }
