@@ -89,7 +89,7 @@
     const playlistEl = document.getElementById('playlist');
     const albumArt = document.getElementById('albumArt');
 
-    let files = [];
+    let tracks = [];
     let currentTrack = 0;
 
     function getDriveUrl(id) {
@@ -101,15 +101,15 @@
     }
 
     function findAlbumArt(trackName) {
-      const baseName = trackName.replace(/\.[^/.]+$/, "");
-      return files.find(
+      const baseName = trackName.replace(/\.[^/.]+$/, ""); // remove extension
+      return tracks.find(
         f => getFileExtension(f.name) === 'jpg' && f.name.startsWith(baseName)
       );
     }
 
     function renderPlaylist() {
       playlistEl.innerHTML = '';
-      files.forEach((track, index) => {
+      tracks.forEach((track, index) => {
         if (!['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
         const li = document.createElement('li');
         li.textContent = track.name;
@@ -120,7 +120,7 @@
     }
 
     function playTrack(index) {
-      const track = files[index];
+      const track = tracks[index];
       if (!track || !['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
 
       currentTrack = index;
@@ -135,51 +135,47 @@
 
     function nextTrack() {
       let i = currentTrack + 1;
-      while (i < files.length && !['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name))) i++;
-      if (i >= files.length) i = 0;
+      while (i < tracks.length && !['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name))) i++;
+      if (i >= tracks.length) i = 0;
       playTrack(i);
     }
 
     function prevTrack() {
       let i = currentTrack - 1;
-      while (i >= 0 && !['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name))) i--;
-      if (i < 0) i = files.length - 1;
+      while (i >= 0 && !['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name))) i--;
+      if (i < 0) i = tracks.length - 1;
       playTrack(i);
     }
 
     function shuffleTrack() {
       let i;
       do {
-        i = Math.floor(Math.random() * files.length);
-      } while (!['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name)));
+        i = Math.floor(Math.random() * tracks.length);
+      } while (!['mp3', 'wav', 'm4a'].includes(getFileExtension(tracks[i].name)));
       playTrack(i);
-    }
-
-    async function loadAllFiles(pageToken = '') {
-      const res = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=nextPageToken,files(id,name)&pageSize=100&pageToken=${pageToken}&key=${apiKey}`
-      );
-      const data = await res.json();
-      files.push(...data.files);
-      if (data.nextPageToken) {
-        await loadAllFiles(data.nextPageToken); // recursively get next pages
-      }
     }
 
     async function loadTracks() {
       try {
-        await loadAllFiles();
-        const firstPlayableIndex = files.findIndex(file =>
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name)&key=${apiKey}`
+        );
+        const data = await res.json();
+        tracks = data.files;
+        if (!tracks.length) {
+          alert('No files found.');
+          return;
+        }
+
+        const firstPlayableIndex = tracks.findIndex(file =>
           ['mp3', 'wav', 'm4a'].includes(getFileExtension(file.name))
         );
         if (firstPlayableIndex >= 0) {
           playTrack(firstPlayableIndex);
-        } else {
-          alert('No playable audio files found.');
         }
+
       } catch (err) {
         console.error('Error loading tracks:', err);
-        alert('Failed to load tracks from Drive.');
       }
     }
 
