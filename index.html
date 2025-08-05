@@ -1,161 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Google Drive Auto Music Player</title>
-<style>
-  body { margin:0; font-family: Arial, sans-serif; background: #121212; color: white; }
-  .player { max-width: 600px; margin: 2rem auto; background: #181818; border-radius: 12px; padding: 1rem; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
-  #search { width: 100%; padding: 0.5rem; border-radius: 8px; border: none; margin-bottom: 1rem; font-size: 16px; background: #282828; color: white; }
-  #title { text-align: center; margin-bottom: 0.5rem; font-weight: bold; font-size: 1.2rem; }
-  audio { width: 100%; outline: none; background: #282828; border-radius: 8px; }
-  .controls { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; }
-  button { background: #1db954; border: none; padding: 0.5rem 1rem; border-radius: 50%; color: white; font-size: 1.2rem; cursor: pointer; transition: background 0.3s ease; }
-  button:hover { background: #1ed760; }
-  .track-list { max-height: 300px; overflow-y: auto; margin-top: 1rem; border-top: 1px solid #333; }
-  .track { padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #333; }
-  .track.active, .track:hover { background: #333; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Basic Google Drive Music Player</title>
 </head>
 <body>
-<div class="player">
-  <input type="text" id="search" placeholder="Search songs..." />
-  <div id="title">Loading songs from Google Drive...</div>
-  <audio id="audio" controls></audio>
-  <div class="controls">
-    <button id="prev">⏮️</button>
-    <button id="playpause">▶️</button>
-    <button id="next">⏭️</button>
-    <button id="shuffle">🔀</button>
-  </div>
-  <div class="track-list" id="trackList"></div>
-</div>
+
+<input type="text" id="search" placeholder="Search songs..." />
+<div id="songList"></div>
+<audio id="audio" controls></audio>
 
 <script>
-  const apiKey = "AIzaSyAKrF1D3OqXoUUDyOf730DFSvBY84MWKxY";
+  const apiKey = "AIzaSyDsYE91wH7UDwu8eZNbD1CFuVcilgYeZhI";
   const folderId = "1DGz9zEQh29EAqTZpmWK5mwSj5HComnkn";
 
   const audio = document.getElementById('audio');
-  const title = document.getElementById('title');
+  const songList = document.getElementById('songList');
   const search = document.getElementById('search');
-  const trackList = document.getElementById('trackList');
-  const playpauseBtn = document.getElementById('playpause');
-  const prevBtn = document.getElementById('prev');
-  const nextBtn = document.getElementById('next');
-  const shuffleBtn = document.getElementById('shuffle');
 
-  let allTracks = [];
-  let filteredTracks = [];
+  let allSongs = [];
+  let filteredSongs = [];
   let currentIndex = -1;
-  let isPlaying = false;
 
-  async function fetchTracks() {
+  async function fetchSongs() {
     const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&key=${apiKey}&fields=files(id,name,mimeType)&pageSize=1000`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if(data.files){
-        allTracks = data.files.filter(f => {
-          return f.mimeType.startsWith('audio/') || /\.(mp3|m4a|wav)$/i.test(f.name);
-        }).map(f => ({
-          title: f.name.replace(/\.(mp3|m4a|wav)$/i, ''),
-          file: `https://drive.google.com/uc?export=download&id=${f.id}`
-        }));
-        filteredTracks = [...allTracks];
-        renderTrackList();
-        if(allTracks.length > 0){
-          loadTrack(0);
-          title.textContent = "";
-        } else {
-          title.textContent = "No audio files found in folder.";
-        }
-      } else {
-        title.textContent = "Failed to load files.";
-      }
-    } catch(e) {
-      console.error(e);
-      title.textContent = "Error loading files.";
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.files) {
+      allSongs = data.files.filter(f => {
+        return f.mimeType.startsWith('audio/') || /\.(mp3|m4a|wav)$/i.test(f.name);
+      }).map(f => ({
+        title: f.name.replace(/\.(mp3|m4a|wav)$/i, ''),
+        url: `https://drive.google.com/uc?export=download&id=${f.id}`
+      }));
+      filteredSongs = [...allSongs];
+      renderSongList();
+    } else {
+      songList.textContent = "Failed to load songs.";
     }
   }
 
-  function renderTrackList() {
-    trackList.innerHTML = '';
-    filteredTracks.forEach((track, i) => {
+  function renderSongList() {
+    songList.innerHTML = '';
+    filteredSongs.forEach((song, i) => {
       const div = document.createElement('div');
-      div.className = 'track' + (i === currentIndex ? ' active' : '');
-      div.textContent = track.title;
+      div.textContent = song.title;
+      div.style.cursor = 'pointer';
       div.onclick = () => {
-        loadTrack(i);
-        playAudio();
+        playSong(i);
       };
-      trackList.appendChild(div);
+      songList.appendChild(div);
     });
   }
 
-  function loadTrack(index) {
-    if (index < 0) index = filteredTracks.length - 1;
-    else if (index >= filteredTracks.length) index = 0;
+  function playSong(index) {
     currentIndex = index;
-    const track = filteredTracks[index];
-    title.textContent = track.title;
-    audio.src = track.file;
-    audio.load();
-    updateActiveTrack();
-  }
-
-  function updateActiveTrack() {
-    [...trackList.children].forEach((child, i) => {
-      child.classList.toggle('active', i === currentIndex);
-    });
-  }
-
-  function playAudio() {
-    if (currentIndex === -1) return;
+    audio.src = filteredSongs[index].url;
     audio.play();
-    isPlaying = true;
-    playpauseBtn.textContent = '⏸️';
   }
-
-  function pauseAudio() {
-    audio.pause();
-    isPlaying = false;
-    playpauseBtn.textContent = '▶️';
-  }
-
-  playpauseBtn.onclick = () => {
-    if (isPlaying) pauseAudio();
-    else playAudio();
-  };
-
-  prevBtn.onclick = () => {
-    loadTrack(currentIndex - 1);
-    playAudio();
-  };
-
-  nextBtn.onclick = () => {
-    loadTrack(currentIndex + 1);
-    playAudio();
-  };
-
-  shuffleBtn.onclick = () => {
-    const randomIndex = Math.floor(Math.random() * filteredTracks.length);
-    loadTrack(randomIndex);
-    playAudio();
-  };
 
   search.addEventListener('input', () => {
     const q = search.value.toLowerCase();
-    filteredTracks = allTracks.filter(t => t.title.toLowerCase().includes(q));
-    renderTrackList();
-    if(filteredTracks.length > 0) loadTrack(0);
+    filteredSongs = allSongs.filter(song => song.title.toLowerCase().includes(q));
+    renderSongList();
   });
 
-  audio.addEventListener('ended', () => {
-    nextBtn.onclick();
-  });
-
-  fetchTracks();
+  fetchSongs();
 </script>
+
 </body>
 </html>
