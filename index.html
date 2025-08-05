@@ -2,166 +2,189 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotify-Style Google Drive Player</title>
+  <title>Drive Music Player</title>
   <style>
     body {
-      margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background-color: #121212;
+      background: #111;
+      color: #eee;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #1db954;
+    }
+    .player-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .album-art {
+      width: 200px;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #333;
+    }
+    audio {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .controls button {
+      padding: 10px 20px;
+      margin: 5px;
+      background-color: #1db954;
+      border: none;
+      border-radius: 6px;
       color: white;
+      cursor: pointer;
     }
-    .player {
-      max-width: 600px;
-      margin: 2rem auto;
-      background-color: #1e1e1e;
-      border-radius: 12px;
-      padding: 1rem;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+    .controls button:hover {
+      background-color: #17a44a;
     }
-    .track-list {
+    #playlist {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
       max-height: 300px;
       overflow-y: auto;
-      margin-top: 1rem;
+      width: 100%;
+      text-align: left;
     }
-    .track {
-      padding: 0.5rem;
+    #playlist li {
+      padding: 10px;
       cursor: pointer;
       border-bottom: 1px solid #333;
     }
-    .track:hover {
-      background-color: #2a2a2a;
+    #playlist li:hover {
+      background: #222;
     }
-    .active {
-      background-color: #333;
-    }
-    .controls {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 1rem;
-    }
-    button {
-      background-color: #1db954;
+    #playlist .active {
+      background: #1db954;
       color: white;
-      border: none;
-      border-radius: 20px;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    button:hover {
-      background-color: #1ed760;
-    }
-    .cover {
-      width: 100%;
-      height: 300px;
-      background-color: #222;
-      background-size: cover;
-      background-position: center;
-      border-radius: 12px;
-      margin-bottom: 1rem;
-    }
-    #search {
-      width: 100%;
-      padding: 0.5rem;
-      border: none;
-      border-radius: 8px;
-      margin-bottom: 1rem;
     }
   </style>
 </head>
 <body>
-  <div class="player">
-    <input id="search" type="text" placeholder="Search songs..." />
-    <div class="cover" id="cover"></div>
-    <h2 id="title">Loading...</h2>
-    <audio id="audio" controls style="width:100%"></audio>
-    <div class="controls">
-      <button onclick="prev()">⏮️</button>
-      <button onclick="togglePlay()">▶️/⏸️</button>
-      <button onclick="next()">⏭️</button>
-      <button onclick="shuffle()">🔀</button>
-    </div>
-    <div class="track-list" id="list"></div>
+  <h1>🎶 Drive Music Player</h1>
+
+  <div class="player-container">
+    <img id="albumArt" class="album-art" src="" alt="Album Art" />
+    <audio id="audio" controls autoplay></audio>
   </div>
+
+  <div class="controls">
+    <button onclick="prevTrack()">⏮️ Prev</button>
+    <button onclick="nextTrack()">⏭️ Next</button>
+    <button onclick="shuffleTrack()">🔀 Shuffle</button>
+  </div>
+
+  <ul id="playlist"></ul>
+
   <script>
     const folderId = '1DGz9zEQh29EAqTZpmWK5mwSj5HComnkn';
     const apiKey = 'AIzaSyDsYE91wH7UDwu8eZNbD1CFuVcilgYeZhI';
     const audio = document.getElementById('audio');
-    const title = document.getElementById('title');
-    const list = document.getElementById('list');
-    const cover = document.getElementById('cover');
-    const search = document.getElementById('search');
+    const playlistEl = document.getElementById('playlist');
+    const albumArt = document.getElementById('albumArt');
 
-    let tracks = [];
-    let current = 0;
-
-    async function fetchFiles() {
-      const q = encodeURIComponent(`'${folderId}' in parents and (mimeType='audio/mpeg' or mimeType='audio/wav' or mimeType='audio/x-m4a')`);
-      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,thumbnailLink)&key=${apiKey}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      tracks = data.files;
-      renderList();
-      loadTrack(current);
-    }
+    let files = [];
+    let currentTrack = 0;
 
     function getDriveUrl(id) {
       return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${apiKey}`;
     }
 
-    function loadTrack(i) {
-      const track = tracks[i];
-      if (!track) return;
-      current = i;
-      title.textContent = track.name;
+    function getFileExtension(name) {
+      return name.split('.').pop().toLowerCase();
+    }
+
+    function findAlbumArt(trackName) {
+      const baseName = trackName.replace(/\.[^/.]+$/, "");
+      return files.find(
+        f => getFileExtension(f.name) === 'jpg' && f.name.startsWith(baseName)
+      );
+    }
+
+    function renderPlaylist() {
+      playlistEl.innerHTML = '';
+      files.forEach((track, index) => {
+        if (!['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
+        const li = document.createElement('li');
+        li.textContent = track.name;
+        li.onclick = () => playTrack(index);
+        if (index === currentTrack) li.classList.add('active');
+        playlistEl.appendChild(li);
+      });
+    }
+
+    function playTrack(index) {
+      const track = files[index];
+      if (!track || !['mp3', 'wav', 'm4a'].includes(getFileExtension(track.name))) return;
+
+      currentTrack = index;
       audio.src = getDriveUrl(track.id);
-      audio.load();
-      cover.style.backgroundImage = track.thumbnailLink ? `url(${track.thumbnailLink})` : 'none';
-      audio.oncanplay = () => audio.play().catch(() => {});
-      updateActive();
+      audio.play();
+
+      const artFile = findAlbumArt(track.name);
+      albumArt.src = artFile ? getDriveUrl(artFile.id) : '';
+
+      renderPlaylist();
     }
 
-    function renderList() {
-      list.innerHTML = '';
-      const keyword = search.value.toLowerCase();
-      tracks.forEach((track, i) => {
-        if (!track.name.toLowerCase().includes(keyword)) return;
-        const div = document.createElement('div');
-        div.className = 'track';
-        if (i === current) div.classList.add('active');
-        div.textContent = track.name;
-        div.onclick = () => loadTrack(i);
-        list.appendChild(div);
-      });
+    function nextTrack() {
+      let i = currentTrack + 1;
+      while (i < files.length && !['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name))) i++;
+      if (i >= files.length) i = 0;
+      playTrack(i);
     }
 
-    function updateActive() {
-      [...list.children].forEach((c, i) => {
-        c.classList.toggle('active', i === current);
-      });
+    function prevTrack() {
+      let i = currentTrack - 1;
+      while (i >= 0 && !['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name))) i--;
+      if (i < 0) i = files.length - 1;
+      playTrack(i);
     }
 
-    function togglePlay() {
-      if (audio.paused) audio.play();
-      else audio.pause();
-    }
-    function next() {
-      current = (current + 1) % tracks.length;
-      loadTrack(current);
-    }
-    function prev() {
-      current = (current - 1 + tracks.length) % tracks.length;
-      loadTrack(current);
-    }
-    function shuffle() {
-      current = Math.floor(Math.random() * tracks.length);
-      loadTrack(current);
+    function shuffleTrack() {
+      let i;
+      do {
+        i = Math.floor(Math.random() * files.length);
+      } while (!['mp3', 'wav', 'm4a'].includes(getFileExtension(files[i].name)));
+      playTrack(i);
     }
 
-    search.addEventListener('input', renderList);
+    async function loadAllFiles(pageToken = '') {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=nextPageToken,files(id,name)&pageSize=100&pageToken=${pageToken}&key=${apiKey}`
+      );
+      const data = await res.json();
+      files.push(...data.files);
+      if (data.nextPageToken) {
+        await loadAllFiles(data.nextPageToken); // recursively get next pages
+      }
+    }
 
-    fetchFiles();
+    async function loadTracks() {
+      try {
+        await loadAllFiles();
+        const firstPlayableIndex = files.findIndex(file =>
+          ['mp3', 'wav', 'm4a'].includes(getFileExtension(file.name))
+        );
+        if (firstPlayableIndex >= 0) {
+          playTrack(firstPlayableIndex);
+        } else {
+          alert('No playable audio files found.');
+        }
+      } catch (err) {
+        console.error('Error loading tracks:', err);
+        alert('Failed to load tracks from Drive.');
+      }
+    }
+
+    loadTracks();
+    audio.addEventListener('ended', nextTrack);
   </script>
 </body>
 </html>
